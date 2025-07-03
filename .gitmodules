@@ -1,0 +1,3 @@
+[submodule "perfmon"]
+	path = perfmon
+	url = git@github.com:zenkovich/imgui_perfmon.git

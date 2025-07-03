@@ -12,6 +12,9 @@
 #include <d3d9.h>
 #include <tchar.h>
 
+#include "perfmon/PerfmonWidget.h"
+#include "perfmon/NanoProfiler.h"
+
 // Data
 static LPDIRECT3D9              g_pD3D = nullptr;
 static LPDIRECT3DDEVICE9        g_pd3dDevice = nullptr;
@@ -90,22 +93,36 @@ int main(int, char**)
     bool show_another_window = false;
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
+    int testInt = 0;
+
+    Perfmon::PerfmonWidget perfmonWidget;
+    perfmonWidget.RegisterMetric(Perfmon::Metric("FPS", [&]() { return static_cast<double>(io.Framerate); }, { 55, 20 }, { 30, 65, 120 }));
+    perfmonWidget.RegisterMetric(Perfmon::Metric("Vertices", [&]() { return static_cast<double>(io.MetricsRenderVertices); }, { 2000, 500 }, { 100, 400, 800 }));
+    perfmonWidget.RegisterCounterMetric(Perfmon::EntityCountMetric("Test Int", [&]() { return testInt; }, {}));
+
     // Main loop
     bool done = false;
     while (!done)
     {
+        Perfmon::NanoProfiler::Clear();
+        NANO_PROFILE_SCOPE("MainLoop");
+
         // Poll and handle messages (inputs, window resize, etc.)
         // See the WndProc() function below for our to dispatch events to the Win32 backend.
-        MSG msg;
-        while (::PeekMessage(&msg, nullptr, 0U, 0U, PM_REMOVE))
         {
-            ::TranslateMessage(&msg);
-            ::DispatchMessage(&msg);
-            if (msg.message == WM_QUIT)
-                done = true;
+            NANO_PROFILE_SCOPE("PeekMsg");
+
+            MSG msg;
+            while (::PeekMessage(&msg, nullptr, 0U, 0U, PM_REMOVE))
+            {
+                ::TranslateMessage(&msg);
+                ::DispatchMessage(&msg);
+                if (msg.message == WM_QUIT)
+                    done = true;
+            }
+            if (done)
+                break;
         }
-        if (done)
-            break;
 
         // Handle lost D3D9 device
         if (g_DeviceLost)
@@ -137,10 +154,14 @@ int main(int, char**)
 
         // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
         if (show_demo_window)
+        {
+            NANO_PROFILE_SCOPE("Demo imgui");
             ImGui::ShowDemoWindow(&show_demo_window);
+        }
 
         // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
         {
+            NANO_PROFILE_SCOPE("Hello wnd");
             static float f = 0.0f;
             static int counter = 0;
 
@@ -150,7 +171,8 @@ int main(int, char**)
             ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
             ImGui::Checkbox("Another Window", &show_another_window);
 
-            ImGui::SliderFloat("float", &f, 0.0f, 1.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+            ImGui::SliderFloat("float", &f, 0.0f, 100.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
+            ImGui::SliderInt("test int", &testInt, 0, 100);           // Edit 1 int using a slider from 0 to 100 (default value 50)
             ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
 
             if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
@@ -172,22 +194,43 @@ int main(int, char**)
             ImGui::End();
         }
 
-        // Rendering
-        ImGui::EndFrame();
-        g_pd3dDevice->SetRenderState(D3DRS_ZENABLE, FALSE);
-        g_pd3dDevice->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
-        g_pd3dDevice->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
-        D3DCOLOR clear_col_dx = D3DCOLOR_RGBA((int)(clear_color.x*clear_color.w*255.0f), (int)(clear_color.y*clear_color.w*255.0f), (int)(clear_color.z*clear_color.w*255.0f), (int)(clear_color.w*255.0f));
-        g_pd3dDevice->Clear(0, nullptr, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, clear_col_dx, 1.0f, 0);
-        if (g_pd3dDevice->BeginScene() >= 0)
+        // 4. Show perfmon window
         {
-            ImGui::Render();
-            ImGui_ImplDX9_RenderDrawData(ImGui::GetDrawData());
-            g_pd3dDevice->EndScene();
+            NANO_PROFILE_SCOPE("Perfmon");
+
+            ImGui::Begin("Perfmon");
+            perfmonWidget.DrawGUI();
+            perfmonWidget.Update(1000.0f / io.Framerate);
+            ImGui::End();
         }
-        HRESULT result = g_pd3dDevice->Present(nullptr, nullptr, nullptr, nullptr);
-        if (result == D3DERR_DEVICELOST)
-            g_DeviceLost = true;
+
+        // Rendering
+        {
+            NANO_PROFILE_SCOPE("End frame");
+            ImGui::EndFrame();
+        }
+
+        {
+            NANO_PROFILE_SCOPE("Render");
+            g_pd3dDevice->SetRenderState(D3DRS_ZENABLE, FALSE);
+            g_pd3dDevice->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
+            g_pd3dDevice->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
+            D3DCOLOR clear_col_dx = D3DCOLOR_RGBA((int)(clear_color.x * clear_color.w * 255.0f), (int)(clear_color.y * clear_color.w * 255.0f), (int)(clear_color.z * clear_color.w * 255.0f), (int)(clear_color.w * 255.0f));
+            g_pd3dDevice->Clear(0, nullptr, D3DCLEAR_TARGET | D3DCLEAR_ZBUFFER, clear_col_dx, 1.0f, 0);
+            if (g_pd3dDevice->BeginScene() >= 0)
+            {
+                ImGui::Render();
+                ImGui_ImplDX9_RenderDrawData(ImGui::GetDrawData());
+                g_pd3dDevice->EndScene();
+            }
+        }
+
+        {
+            NANO_PROFILE_SCOPE("Present");
+            HRESULT result = g_pd3dDevice->Present(nullptr, nullptr, nullptr, nullptr);
+            if (result == D3DERR_DEVICELOST)
+                g_DeviceLost = true;
+        }
     }
 
     // Cleanup

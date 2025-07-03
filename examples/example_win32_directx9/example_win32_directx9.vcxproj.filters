@@ -8,6 +8,9 @@
     <Filter Include="imgui">
       <UniqueIdentifier>{a82cba23-9de0-45c2-b1e3-2eb1666702de}</UniqueIdentifier>
     </Filter>
+    <Filter Include="perfmon">
+      <UniqueIdentifier>{fe8002a8-e456-40e3-b2ce-cd2a5e00439f}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -34,6 +37,12 @@
     <ClCompile Include="..\..\imgui_widgets.cpp">
       <Filter>imgui</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\..\imgui_p\perfmon\PerfmonWidget.cpp">
+      <Filter>perfmon</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\..\imgui_p\perfmon\NanoProfiler.cpp">
+      <Filter>perfmon</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\imconfig.h">
@@ -50,6 +59,15 @@
     </ClInclude>
     <ClInclude Include="..\..\backends\imgui_impl_dx9.h">
       <Filter>sources</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\imgui_p\perfmon\TimeSeries.h">
+      <Filter>perfmon</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\imgui_p\perfmon\PerfmonWidget.h">
+      <Filter>perfmon</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\..\imgui_p\perfmon\NanoProfiler.h">
+      <Filter>perfmon</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
