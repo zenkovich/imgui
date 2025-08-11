@@ -11,9 +11,12 @@
 #include "imgui_impl_win32.h"
 #include <d3d9.h>
 #include <tchar.h>
+#include <fstream>
+#include <sstream>
 
 #include "perfmon/PerfmonWidget.h"
 #include "perfmon/NanoProfiler.h"
+#include "cg_App.h"
 
 // Data
 static LPDIRECT3D9              g_pD3D = nullptr;
@@ -89,7 +92,7 @@ int main(int, char**)
     //IM_ASSERT(font != nullptr);
 
     // Our state
-    bool show_demo_window = true;
+    bool show_demo_window = false;
     bool show_another_window = false;
     ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
@@ -99,6 +102,36 @@ int main(int, char**)
     perfmonWidget.RegisterMetric(Perfmon::Metric("FPS", [&]() { return static_cast<double>(io.Framerate); }, { 55, 20 }, { 30, 65, 120 }));
     perfmonWidget.RegisterMetric(Perfmon::Metric("Vertices", [&]() { return static_cast<double>(io.MetricsRenderVertices); }, { 2000, 500 }, { 100, 400, 800 }));
     perfmonWidget.RegisterCounterMetric(Perfmon::EntityCountMetric("Test Int", [&]() { return testInt; }, {}));
+
+    // Code Graph app
+    cg::App codeGraphApp;
+    {
+        // Try load external config; fallback to default
+        std::string configText;
+        {
+            std::ifstream cf("code_graph_config.json");
+            if (cf.is_open()) { std::ostringstream ss; ss << cf.rdbuf(); configText = ss.str(); }
+        }
+        if (configText.empty()) configText = R"({
+            "source_roots": ["."],
+            "physics": {
+                "time_step": 0.016,
+                "solver_iterations": 8,
+                "link_rest_length": 80.0,
+                "link_stiffness": 1.0,
+                "repulsion_radius": 30.0,
+                "repulsion_strength": 200.0,
+                "damping": 0.02,
+                "max_displacement": 50.0
+            },
+            "render": {
+                "circle_radius": 6.0,
+                "zoom_speed": 1.1,
+                "pan_speed": 1.0
+            }
+        })";
+        codeGraphApp.Initialize(configText);
+    }
 
     // Main loop
     bool done = false;
@@ -152,57 +185,31 @@ int main(int, char**)
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
 
-        // 1. Show the big demo window (Most of the sample code is in ImGui::ShowDemoWindow()! You can browse its code to learn more about Dear ImGui!).
-        if (show_demo_window)
+        // Combined full-screen window with graph + perfmon
+        ImGui::SetNextWindowPos(ImVec2(0, 0), ImGuiCond_Always);
+        ImGui::SetNextWindowSize(io.DisplaySize, ImGuiCond_Always);
+        ImGuiWindowFlags win_flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoSavedSettings;
+        ImGui::Begin("Workspace", nullptr, win_flags);
+        ImVec2 canvas_p0 = ImGui::GetCursorScreenPos();
+        ImVec2 avail = ImGui::GetContentRegionAvail();
+        if (avail.x < 50) avail.x = 50; if (avail.y < 50) avail.y = 50;
+
+        // Draw graph on full canvas
         {
-            NANO_PROFILE_SCOPE("Demo imgui");
-            ImGui::ShowDemoWindow(&show_demo_window);
+            NANO_PROFILE_SCOPE("CodeGraph");
+            codeGraphApp.Frame(1000.0f / io.Framerate, canvas_p0, avail);
         }
 
-        // 2. Show a simple window that we create ourselves. We use a Begin/End pair to create a named window.
-        {
-            NANO_PROFILE_SCOPE("Hello wnd");
-            static float f = 0.0f;
-            static int counter = 0;
+        // Overlay perfmon in a corner
+        ImGui::SetCursorScreenPos(ImVec2(canvas_p0.x + 10, canvas_p0.y + 10));
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, IM_COL32(10,10,10,180));
+        ImGui::BeginChild("PerfmonChild", ImVec2(380, 200), true, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings);
+        perfmonWidget.DrawGUI();
+        perfmonWidget.Update(1000.0f / io.Framerate);
+        ImGui::EndChild();
+        ImGui::PopStyleColor();
 
-            ImGui::Begin("Hello, world!");                          // Create a window called "Hello, world!" and append into it.
-
-            ImGui::Text("This is some useful text.");               // Display some text (you can use a format strings too)
-            ImGui::Checkbox("Demo Window", &show_demo_window);      // Edit bools storing our window open/close state
-            ImGui::Checkbox("Another Window", &show_another_window);
-
-            ImGui::SliderFloat("float", &f, 0.0f, 100.0f);            // Edit 1 float using a slider from 0.0f to 1.0f
-            ImGui::SliderInt("test int", &testInt, 0, 100);           // Edit 1 int using a slider from 0 to 100 (default value 50)
-            ImGui::ColorEdit3("clear color", (float*)&clear_color); // Edit 3 floats representing a color
-
-            if (ImGui::Button("Button"))                            // Buttons return true when clicked (most widgets return true when edited/activated)
-                counter++;
-            ImGui::SameLine();
-            ImGui::Text("counter = %d", counter);
-
-            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
-            ImGui::End();
-        }
-
-        // 3. Show another simple window.
-        if (show_another_window)
-        {
-            ImGui::Begin("Another Window", &show_another_window);   // Pass a pointer to our bool variable (the window will have a closing button that will clear the bool when clicked)
-            ImGui::Text("Hello from another window!");
-            if (ImGui::Button("Close Me"))
-                show_another_window = false;
-            ImGui::End();
-        }
-
-        // 4. Show perfmon window
-        {
-            NANO_PROFILE_SCOPE("Perfmon");
-
-            ImGui::Begin("Perfmon");
-            perfmonWidget.DrawGUI();
-            perfmonWidget.Update(1000.0f / io.Framerate);
-            ImGui::End();
-        }
+        ImGui::End();
 
         // Rendering
         {

@@ -1,0 +1,28 @@
+{
+  "source_roots": [
+    "../../../homescapes2/src"
+  ],
+  "physics": {
+    "time_step": 0.016,
+    "solver_iterations": 8,
+    "link_rest_length": 150.0,
+    "link_stiffness": 1.0,
+    "repulsion_radius": 40.0,
+    "repulsion_strength": 40.0,
+    "damping": 0.2,
+    "max_displacement": 50.0,
+    "dir_children_angle_strength": 0.1
+  },
+  "render": {
+    "circle_radius": 6.0,
+    "zoom_speed": 1.1,
+    "pan_speed": 1.0
+  },
+  "graph": {
+    "enable_directory_links": true,
+    "enable_include_links": false,
+    "dir_dir_length_coef": 1.7,
+    "dir_file_length_coef": 0.38
+  }
+}
+
